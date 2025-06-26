@@ -457,30 +457,33 @@ export default function ProfileSettingsScreen() {
             <Text style={styles.emptySubtext}>Words will be added as you chat</Text>
           </View>
         ) : (
-          <FlatList
-            data={vocabulary}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.vocabularyItem}>
-                <View style={styles.vocabularyInfo}>
-                  <Text style={styles.vocabularyWord}>{item.word}</Text>
-                  {item.translation && (
-                    <Text style={styles.vocabularyTranslation}>{item.translation}</Text>
-                  )}
-                  {item.part_of_speech && (
-                    <Text style={styles.vocabularyPartOfSpeech}>{item.part_of_speech}</Text>
-                  )}
+          <View style={styles.vocabularyListContainer}>
+            <FlatList
+              data={vocabulary}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.vocabularyItem}>
+                  <View style={styles.vocabularyInfo}>
+                    <Text style={styles.vocabularyWord}>{item.word}</Text>
+                    {item.translation && (
+                      <Text style={styles.vocabularyTranslation}>{item.translation}</Text>
+                    )}
+                    {item.part_of_speech && (
+                      <Text style={styles.vocabularyPartOfSpeech}>{item.part_of_speech}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteVocabularyWord(item.id)}
+                  >
+                    <Text style={styles.deleteButtonText}>×</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => deleteVocabularyWord(item.id)}
-                >
-                  <Text style={styles.deleteButtonText}>×</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            style={styles.vocabularyList}
-          />
+              )}
+              style={styles.vocabularyList}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
         )}
       </View>
     </View>
@@ -633,6 +636,7 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#fff',
     marginBottom: 8,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 20,
@@ -812,6 +816,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
   },
+  vocabularyListContainer: {
+    flex: 1,
+    minHeight: 200,
+  },
   vocabularyList: {
     flex: 1,
   },
@@ -819,18 +827,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
   vocabularyInfo: {
     flex: 1,
+    marginRight: 12,
   },
   vocabularyWord: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   vocabularyTranslation: {
     fontSize: 14,
@@ -842,7 +852,11 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   deleteButton: {
-    padding: 8,
+    padding: 12,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   deleteButtonText: {
     fontSize: 20,
