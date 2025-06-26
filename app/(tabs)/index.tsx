@@ -4,22 +4,22 @@ import { AVAILABLE_LANGUAGES, settingsService, UserSettings } from '@/services/s
 import { UserProfile } from '@/services/supabase';
 import { usageService } from '@/services/usage';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Message {
   id: string;
@@ -37,21 +37,18 @@ export default function HomeScreen() {
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-nano');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  const loadUserSettings = useCallback(async () => {
+    if (!user) return;
+    const { settings } = await settingsService.getUserSettings(user.user_id);
+    if (settings) {
+      setUserSettings(settings);
+      languageLearningService.updateSettings(settings);
+    }
+  }, [user, setUserSettings]);
 
-  // Reload settings when returning to this screen
-  useFocusEffect(
-    React.useCallback(() => {
-      if (user) {
-        loadUserSettings();
-      }
-    }, [user])
-  );
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     const currentUser = await authService.getCurrentUser();
     if (!currentUser) {
       router.replace('/auth/login');
@@ -59,18 +56,20 @@ export default function HomeScreen() {
     }
     setUser(currentUser);
     await loadUserSettings();
-  };
+  }, [setUser, loadUserSettings]);
 
-  const loadUserSettings = async () => {
-    if (!user) return;
-    
-    const { settings } = await settingsService.getUserSettings(user.user_id);
-    if (settings) {
-      setUserSettings(settings);
-      // Update the language learning service with user settings
-      languageLearningService.updateSettings(settings);
-    }
-  };
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Reload settings when returning to this screen
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadUserSettings();
+      }
+    }, [user, loadUserSettings])
+  );
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
@@ -164,9 +163,9 @@ export default function HomeScreen() {
       {corrections.map((correction, index) => (
         <View key={index} style={styles.correctionItem}>
           <View style={styles.correctionText}>
-            <Text style={styles.originalText}>"{correction.original || ''}"</Text>
+            <Text style={styles.originalText}>&quot;{correction.original || ''}&quot;</Text>
             <Text style={styles.correctionArrow}> → </Text>
-            <Text style={styles.correctedText}>"{correction.corrected || ''}"</Text>
+            <Text style={styles.correctedText}>&quot;{correction.corrected || ''}&quot;</Text>
           </View>
           <Text style={styles.explanationText}>{correction.explanation || ''}</Text>
         </View>
@@ -187,7 +186,7 @@ export default function HomeScreen() {
             <Text style={styles.vocabularyPartOfSpeech}> ({vocab.part_of_speech})</Text>
           )}
           {vocab.example_sentence && (
-            <Text style={styles.vocabularyExample}>"{vocab.example_sentence}"</Text>
+            <Text style={styles.vocabularyExample}>&quot;{vocab.example_sentence}&quot;</Text>
           )}
         </View>
       ))}
@@ -199,7 +198,7 @@ export default function HomeScreen() {
       <Text style={styles.alternativesTitle}>Natural Alternatives:</Text>
       {alternatives.map((alt, index) => (
         <View key={index} style={styles.alternativeItem}>
-          <Text style={styles.originalText}>"{alt.original || ''}"</Text>
+          <Text style={styles.originalText}>&quot;{alt.original || ''}&quot;</Text>
           <Text style={styles.alternativesText}>
             Better: {Array.isArray(alt.alternatives) ? alt.alternatives.join(', ') : ''}
           </Text>
@@ -229,7 +228,7 @@ export default function HomeScreen() {
       <Text style={styles.tenseTitle}>Tense Usage:</Text>
       {explanations.map((exp, index) => (
         <View key={index} style={styles.tenseItem}>
-          <Text style={styles.incorrectText}>"{exp.incorrect_usage || ''}"</Text>
+          <Text style={styles.incorrectText}>&quot;{exp.incorrect_usage || ''}&quot;</Text>
           <Text style={styles.correctTenseText}>Use: {exp.correct_tense || ''}</Text>
           <Text style={styles.explanationText}>{exp.explanation || ''}</Text>
           {exp.examples && Array.isArray(exp.examples) && exp.examples.length > 0 && (
@@ -282,6 +281,11 @@ export default function HomeScreen() {
     </View>
   );
 
+  // Platform-aware input padding
+  const inputPaddingBottom = Platform.OS === 'ios'
+    ? insets.bottom > 0 ? insets.bottom : 16
+    : 16;
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -294,10 +298,11 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
           <Text style={styles.title}>LanGPT</Text>
@@ -337,7 +342,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { paddingBottom: inputPaddingBottom }]}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}
@@ -677,6 +682,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderLeftWidth: 4,
     borderLeftColor: '#17a2b8',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   vocabularyTitle: {
     fontSize: 14,

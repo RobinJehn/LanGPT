@@ -2,15 +2,15 @@ import { authService } from '@/services/auth';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,41 +20,51 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showEmailConfirmation, setShowEmailConfirmation] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      setError('Please fill in all fields');
+      setError('Please enter both email and password');
       return;
     }
 
-    setError('');
+    setError(null);
     setLoading(true);
 
     try {
       if (isSignUp) {
+        console.log('Attempting sign up for:', email);
         const result = await authService.signUp(email, password);
+        console.log('Sign up result:', result);
         
         if (result.error) {
+          console.log('Sign up error:', result.error);
           setError(result.error);
         } else if (result.user) {
           // User was created and confirmed immediately (rare)
+          console.log('Sign up successful, user confirmed immediately');
           router.replace('/(tabs)');
         } else {
           // Email confirmation required
+          console.log('Email confirmation required');
           setShowEmailConfirmation(true);
         }
       } else {
+        console.log('Attempting sign in for:', email);
         const result = await authService.signIn(email, password);
+        console.log('Sign in result:', result);
         
         if (result.error) {
+          console.log('Sign in error:', result.error);
           setError(result.error);
         } else if (result.user) {
+          console.log('Sign in successful');
           router.replace('/(tabs)');
         }
       }
     } catch (error) {
-      setError('An unexpected error occurred');
+      console.error('Unexpected error in handleAuth:', error);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -62,15 +72,17 @@ export default function LoginScreen() {
 
   const handleResendConfirmation = async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await authService.resendConfirmationEmail(email);
       if (result.error) {
-        Alert.alert('Error', result.error);
+        setError(result.error);
       } else {
         Alert.alert('Success', 'Confirmation email sent! Please check your inbox.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to resend confirmation email');
+      console.error('Error resending confirmation:', error);
+      setError('Failed to resend confirmation email');
     } finally {
       setLoading(false);
     }
@@ -89,7 +101,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Check Your Email</Text>
             <Text style={styles.subtitle}>
-              We've sent a confirmation email to:
+              We&apos;ve sent a confirmation email to:
             </Text>
             <Text style={styles.emailText}>{email}</Text>
           </View>
@@ -116,7 +128,6 @@ export default function LoginScreen() {
               onPress={() => {
                 setShowEmailConfirmation(false);
                 setIsSignUp(false);
-                setError('');
               }}
             >
               <Text style={styles.switchText}>Back to Sign In</Text>
@@ -142,19 +153,19 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
-            {error ? (
+            {error && (
               <View style={styles.errorContainer}>
                 <Text style={styles.errorText}>{error}</Text>
               </View>
-            ) : null}
-
+            )}
+            
             <TextInput
               style={styles.input}
               placeholder="Email"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
-                setError('');
+                if (error) setError(null);
               }}
               onKeyPress={handleKeyPress}
               keyboardType="email-address"
@@ -169,7 +180,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
-                setError('');
+                if (error) setError(null);
               }}
               onKeyPress={handleKeyPress}
               secureTextEntry
@@ -196,13 +207,13 @@ export default function LoginScreen() {
               style={styles.switchButton}
               onPress={() => {
                 setIsSignUp(!isSignUp);
-                setError('');
+                setError(null);
               }}
             >
               <Text style={styles.switchText}>
                 {isSignUp 
                   ? 'Already have an account? Sign In' 
-                  : 'Don\'t have an account? Sign Up'
+                  : "Don't have an account? Sign Up"
                 }
               </Text>
             </TouchableOpacity>

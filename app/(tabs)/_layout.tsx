@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/HapticTab';
-import { useColorScheme } from '@/hooks/useColorScheme';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
@@ -14,7 +15,7 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -25,8 +26,8 @@ export default function TabLayout() {
           backgroundColor: '#fff',
           borderTopColor: '#E5E5EA',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: Platform.OS === 'ios' ? 60 + insets.bottom : 60,
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8,
           paddingTop: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },

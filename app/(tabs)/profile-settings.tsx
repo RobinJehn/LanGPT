@@ -5,17 +5,18 @@ import { usageService } from '@/services/usage';
 import { useFocusEffect } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,6 +33,7 @@ export default function ProfileSettingsScreen() {
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [customInstructions, setCustomInstructions] = useState('');
   const [updatingSettings, setUpdatingSettings] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   // Refresh data when tab comes into focus
   useFocusEffect(
@@ -104,7 +106,7 @@ export default function ProfileSettingsScreen() {
         setSettings(prev => prev ? { ...prev, [key]: !value } : null);
         Alert.alert('Error', result.error);
       }
-    } catch (error) {
+    } catch {
       // Revert local state if server update failed
       setSettings(prev => prev ? { ...prev, [key]: !value } : null);
       Alert.alert('Error', 'Failed to update setting');
@@ -136,7 +138,7 @@ export default function ProfileSettingsScreen() {
       } else if (result.error) {
         Alert.alert('Error', result.error);
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update custom instructions');
     }
   };
@@ -147,30 +149,40 @@ export default function ProfileSettingsScreen() {
   };
 
   const deleteVocabularyWord = async (wordId: string) => {
-    Alert.alert(
-      'Delete Word',
-      'Are you sure you want to delete this word from your vocabulary?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await settingsService.deleteVocabularyWord(wordId);
-              if (result.error) {
-                Alert.alert('Error', result.error);
-              } else {
-                // Remove the word from local state immediately
-                setVocabulary(prev => prev.filter(word => word.id !== wordId));
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete word');
-            }
+    if (Platform.OS === 'web') {
+      // Web-compatible confirmation
+      setShowDeleteConfirm(wordId);
+    } else {
+      // Native confirmation
+      Alert.alert(
+        'Delete Word',
+        'Are you sure you want to delete this word from your vocabulary?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => performDelete(wordId),
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
+  };
+
+  const performDelete = async (wordId: string) => {
+    try {
+      const result = await settingsService.deleteVocabularyWord(wordId);
+      if (result.error) {
+        Alert.alert('Error', result.error);
+      } else {
+        // Remove the word from local state immediately
+        setVocabulary(prev => prev.filter(word => word.id !== wordId));
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to delete word');
+    } finally {
+      setShowDeleteConfirm(null);
+    }
   };
 
   const getLanguageName = (code: string) => {
@@ -448,7 +460,7 @@ export default function ProfileSettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Vocabulary ({vocabulary.length} words)</Text>
         <Text style={styles.sectionDescription}>
-          Words you've used in your conversations
+          Words you&apos;ve used in your conversations
         </Text>
         
         {vocabulary.length === 0 ? (
@@ -574,6 +586,42 @@ export default function ProfileSettingsScreen() {
           </View>
         </View>
       )}
+
+      {/* Web Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Delete Word</Text>
+              <TouchableOpacity onPress={() => setShowDeleteConfirm(null)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              <Text style={styles.modalText}>
+                Are you sure you want to delete this word from your vocabulary?
+              </Text>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowDeleteConfirm(null)}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.deleteConfirmButton}
+                  onPress={() => performDelete(showDeleteConfirm)}
+                >
+                  <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -636,7 +684,6 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#fff',
     marginBottom: 8,
-    flex: 1,
   },
   sectionTitle: {
     fontSize: 20,
@@ -819,6 +866,7 @@ const styles = StyleSheet.create({
   vocabularyListContainer: {
     flex: 1,
     minHeight: 200,
+    maxHeight: 400,
   },
   vocabularyList: {
     flex: 1,
@@ -939,5 +987,40 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
     marginBottom: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteConfirmButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#ff3b30',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  modalCancelButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    color: '#666',
   },
 }); 
