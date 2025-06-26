@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/HapticTab';
-import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
+  focused?: boolean;
 }) {
   return <Ionicons size={28} style={{ marginBottom: -3 }} {...props} />;
 }
@@ -19,7 +19,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#8E8E93',
         tabBarStyle: {
           backgroundColor: '#fff',
@@ -49,18 +49,20 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} />
-          ),
+          tabBarIcon: ({ color, focused }) => {
+            const iconName = focused ? "chatbox" : "chatbox-outline";
+            return <TabBarIcon name={iconName} color={color} focused={focused} />;
+          },
         }}
       />
       <Tabs.Screen
         name="profile-settings"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? "person" : "person-outline"} color={color} />
-          ),
+          tabBarIcon: ({ color, focused }) => {
+            const iconName = focused ? "person" : "person-outline";
+            return <TabBarIcon name={iconName} color={color} focused={focused} />;
+          },
         }}
       />
     </Tabs>
