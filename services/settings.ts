@@ -23,7 +23,6 @@ export interface VocabularyWord {
     word: string;
     translation: string | null;
     part_of_speech: string | null;
-    example_sentence: string | null;
     difficulty_level: number;
     created_at: string;
 }
@@ -151,30 +150,40 @@ export class SettingsService {
         userId: string,
         word: string,
         translation?: string,
-        partOfSpeech?: string,
-        exampleSentence?: string
+        partOfSpeech?: string
     ): Promise<{ error: string | null }> {
         try {
+            const processedWord = word.toLowerCase().trim();
+            console.log('Adding vocabulary word:', {
+                userId,
+                originalWord: word,
+                processedWord,
+                translation,
+                partOfSpeech
+            });
+
             const { error } = await supabase.rpc('update_vocabulary_usage', {
                 user_id_param: userId,
-                word_param: word.toLowerCase().trim(),
+                word_param: processedWord,
             });
 
             if (error) {
+                console.error('Stored procedure error:', error);
                 return { error: error.message };
             }
 
+            console.log('Stored procedure call successful');
+
             // Update additional information if provided
-            if (translation || partOfSpeech || exampleSentence) {
+            if (translation || partOfSpeech) {
                 const { error: updateError } = await supabase
                     .from('vocabulary')
                     .update({
                         translation: translation || null,
                         part_of_speech: partOfSpeech || null,
-                        example_sentence: exampleSentence || null,
                     })
                     .eq('user_id', userId)
-                    .eq('word', word.toLowerCase().trim());
+                    .eq('word', processedWord);
 
                 if (updateError) {
                     console.error('Failed to update vocabulary details:', updateError);
@@ -183,6 +192,7 @@ export class SettingsService {
 
             return { error: null };
         } catch (error) {
+            console.error('Exception in addVocabularyWord:', error);
             return { error: 'Failed to add vocabulary word' };
         }
     }

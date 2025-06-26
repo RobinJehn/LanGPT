@@ -4,22 +4,22 @@ import { AVAILABLE_LANGUAGES, settingsService, UserSettings } from '@/services/s
 import { UserProfile } from '@/services/supabase';
 import { usageService } from '@/services/usage';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Message {
   id: string;
@@ -37,16 +37,21 @@ export default function HomeScreen() {
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-nano');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
-  const insets = useSafeAreaInsets();
+  const settingsLoadedRef = useRef(false);
 
   const loadUserSettings = useCallback(async () => {
-    if (!user) return;
-    const { settings } = await settingsService.getUserSettings(user.user_id);
-    if (settings) {
-      setUserSettings(settings);
-      languageLearningService.updateSettings(settings);
+    if (!user || settingsLoadedRef.current) return;
+    try {
+      const { settings } = await settingsService.getUserSettings(user.user_id);
+      if (settings) {
+        setUserSettings(settings);
+        languageLearningService.updateSettings(settings);
+        settingsLoadedRef.current = true;
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
     }
-  }, [user, setUserSettings]);
+  }, [user]);
 
   const checkAuth = useCallback(async () => {
     const currentUser = await authService.getCurrentUser();
@@ -55,17 +60,24 @@ export default function HomeScreen() {
       return;
     }
     setUser(currentUser);
-    await loadUserSettings();
-  }, [setUser, loadUserSettings]);
+  }, []);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  // Reload settings when returning to this screen
+  // Load settings when user changes
+  useEffect(() => {
+    if (user) {
+      settingsLoadedRef.current = false;
+      loadUserSettings();
+    }
+  }, [user, loadUserSettings]);
+
+  // Reload settings when returning to this screen (but only if not already loaded)
   useFocusEffect(
     React.useCallback(() => {
-      if (user) {
+      if (user && !settingsLoadedRef.current) {
         loadUserSettings();
       }
     }, [user, loadUserSettings])
@@ -185,9 +197,6 @@ export default function HomeScreen() {
           {vocab.part_of_speech && (
             <Text style={styles.vocabularyPartOfSpeech}> ({vocab.part_of_speech})</Text>
           )}
-          {vocab.example_sentence && (
-            <Text style={styles.vocabularyExample}>&quot;{vocab.example_sentence}&quot;</Text>
-          )}
         </View>
       ))}
     </View>
@@ -281,11 +290,6 @@ export default function HomeScreen() {
     </View>
   );
 
-  // Platform-aware input padding
-  const inputPaddingBottom = Platform.OS === 'ios'
-    ? insets.bottom > 0 ? insets.bottom : 16
-    : 16;
-
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -342,7 +346,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={[styles.inputContainer, { paddingBottom: inputPaddingBottom }]}>
+        <View style={[styles.inputContainer]}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}
@@ -709,12 +713,6 @@ const styles = StyleSheet.create({
   vocabularyPartOfSpeech: {
     fontSize: 12,
     color: '#6c757d',
-    fontStyle: 'italic',
-  },
-  vocabularyExample: {
-    fontSize: 12,
-    color: '#6c757d',
-    marginTop: 4,
     fontStyle: 'italic',
   },
   alternativesContainer: {

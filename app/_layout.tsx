@@ -4,7 +4,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -17,21 +17,25 @@ export default function RootLayout() {
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const checkAuth = useCallback(async () => {
-    try {
-      const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
-    } catch (error) {
-      console.error('Auth check error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const authCheckedRef = useRef(false);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      if (authCheckedRef.current) return;
+      
+      try {
+        authCheckedRef.current = true;
+        const currentUser = await authService.getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Auth check error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     checkAuth();
-  }, [checkAuth]);
+  }, []);
 
   if (!loaded) {
     // Async font loading only occurs in development.

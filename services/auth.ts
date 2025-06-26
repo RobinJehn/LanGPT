@@ -189,7 +189,7 @@ export class AuthService {
 
     async getCurrentUser(): Promise<UserProfile | null> {
         try {
-            console.log('Getting current user');
+            console.log('Getting current user at:', new Date().toISOString());
             const { data: { user } } = await supabase.auth.getUser();
 
             if (!user) {

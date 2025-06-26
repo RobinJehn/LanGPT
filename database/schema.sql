@@ -49,7 +49,6 @@ CREATE TABLE IF NOT EXISTS vocabulary (
   word TEXT NOT NULL,
   translation TEXT,
   part_of_speech TEXT,
-  example_sentence TEXT,
   difficulty_level INTEGER DEFAULT 1,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id, word)

@@ -3,7 +3,7 @@ import { languageLearningService } from '@/services/openai';
 import { AVAILABLE_LANGUAGES, settingsService, UserSettings, VocabularyWord } from '@/services/settings';
 import { usageService } from '@/services/usage';
 import { useFocusEffect } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,15 +34,39 @@ export default function ProfileSettingsScreen() {
   const [customInstructions, setCustomInstructions] = useState('');
   const [updatingSettings, setUpdatingSettings] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const dataLoadedRef = useRef(false);
 
   // Refresh data when tab comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
-    }, [])
+      if (!dataLoadedRef.current) {
+        loadData();
+      } else if (activeTab === 'vocabulary') {
+        // Always refresh vocabulary when vocabulary tab is active
+        loadVocabulary();
+      }
+    }, [activeTab])
   );
 
+  const loadVocabulary = async () => {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser) {
+        return;
+      }
+
+      const vocabularyResult = await settingsService.getVocabulary(currentUser.user_id);
+      if (vocabularyResult.vocabulary) {
+        setVocabulary(vocabularyResult.vocabulary);
+      }
+    } catch (error) {
+      console.error('Error loading vocabulary:', error);
+    }
+  };
+
   const loadData = async () => {
+    if (dataLoadedRef.current) return;
+    
     try {
       const currentUser = await authService.getCurrentUser();
       if (!currentUser) {
@@ -67,6 +91,8 @@ export default function ProfileSettingsScreen() {
       if (statsResult.stats) {
         setUserStats(statsResult.stats);
       }
+      
+      dataLoadedRef.current = true;
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -76,7 +102,11 @@ export default function ProfileSettingsScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    if (activeTab === 'vocabulary') {
+      await loadVocabulary();
+    } else {
+      await loadData();
+    }
     setRefreshing(false);
   };
 
@@ -197,6 +227,14 @@ export default function ProfileSettingsScreen() {
       minimumFractionDigits: 6,
       maximumFractionDigits: 6,
     }).format(amount);
+  };
+
+  const handleTabSwitch = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === 'vocabulary') {
+      // Refresh vocabulary when switching to vocabulary tab
+      loadVocabulary();
+    }
   };
 
   const renderProfileTab = () => (
@@ -457,11 +495,21 @@ export default function ProfileSettingsScreen() {
 
   const renderVocabularyTab = () => (
     <View style={styles.tabContent}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vocabulary ({vocabulary.length} words)</Text>
-        <Text style={styles.sectionDescription}>
-          Words you&apos;ve used in your conversations
-        </Text>
+      <View style={[styles.section, styles.vocabularySection]}>
+        <View style={styles.vocabularyHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Vocabulary ({vocabulary.length} words)</Text>
+            <Text style={styles.sectionDescription}>
+              Words you&apos;ve used in your conversations
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={loadVocabulary}
+          >
+            <Text style={styles.refreshButtonText}>↻</Text>
+          </TouchableOpacity>
+        </View>
         
         {vocabulary.length === 0 ? (
           <View style={styles.emptyState}>
@@ -494,6 +542,9 @@ export default function ProfileSettingsScreen() {
               )}
               style={styles.vocabularyList}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+              }
             />
           </View>
         )}
@@ -513,45 +564,49 @@ export default function ProfileSettingsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile & Settings</Text>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }} edges={[ 'left', 'right', 'top']}>
+      <View style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Profile & Settings</Text>
+        </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabNavigation}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'profile' && styles.activeTabButton]}
-          onPress={() => setActiveTab('profile')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'profile' && styles.activeTabButtonText]}>
-            Profile
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'settings' && styles.activeTabButton]}
-          onPress={() => setActiveTab('settings')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'settings' && styles.activeTabButtonText]}>
-            Settings
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'vocabulary' && styles.activeTabButton]}
-          onPress={() => setActiveTab('vocabulary')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'vocabulary' && styles.activeTabButtonText]}>
-            Vocabulary
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Tab Navigation */}
+        <View style={styles.tabNavigation}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'profile' && styles.activeTabButton]}
+            onPress={() => handleTabSwitch('profile')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'profile' && styles.activeTabButtonText]}>
+              Profile
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'settings' && styles.activeTabButton]}
+            onPress={() => handleTabSwitch('settings')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'settings' && styles.activeTabButtonText]}>
+              Settings
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'vocabulary' && styles.activeTabButton]}
+            onPress={() => handleTabSwitch('vocabulary')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'vocabulary' && styles.activeTabButtonText]}>
+              Vocabulary
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Tab Content */}
-      {activeTab === 'profile' && renderProfileTab()}
-      {activeTab === 'settings' && renderSettingsTab()}
-      {activeTab === 'vocabulary' && renderVocabularyTab()}
+        {/* Tab Content */}
+        <View style={{ flex: 1 }}>
+          {activeTab === 'profile' && renderProfileTab()}
+          {activeTab === 'settings' && renderSettingsTab()}
+          {activeTab === 'vocabulary' && renderVocabularyTab()}
+        </View>
+      </View>
 
       {/* Language Selector Modal */}
       {showLanguageSelector && (
@@ -622,6 +677,7 @@ export default function ProfileSettingsScreen() {
           </View>
         </View>
       )}
+
     </SafeAreaView>
   );
 }
@@ -684,6 +740,17 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#fff',
     marginBottom: 8,
+  },
+  vocabularySection: {
+    flex: 1,
+    marginBottom: 0,
+    paddingBottom: 0,
+  },
+  vocabularyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
@@ -866,7 +933,6 @@ const styles = StyleSheet.create({
   vocabularyListContainer: {
     flex: 1,
     minHeight: 200,
-    maxHeight: 400,
   },
   vocabularyList: {
     flex: 1,
@@ -1022,5 +1088,19 @@ const styles = StyleSheet.create({
   modalCancelButtonText: {
     fontSize: 16,
     color: '#666',
+  },
+  refreshButton: {
+    padding: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minWidth: 40,
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: '500',
   },
 }); 

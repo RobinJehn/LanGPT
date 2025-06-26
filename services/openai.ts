@@ -24,7 +24,6 @@ export interface StructuredResponse {
         word: string;
         translation?: string;
         part_of_speech?: string;
-        example_sentence?: string;
     }[];
     natural_alternatives?: {
         original: string;
@@ -121,7 +120,15 @@ export class LanguageLearningService {
 
             // Track vocabulary if enabled and user is authenticated
             if (userId && this.currentSettings?.track_vocabulary && structuredResponse.vocabulary) {
+                console.log('Vocabulary tracking enabled, user:', userId, 'vocabulary:', structuredResponse.vocabulary);
                 await this.trackVocabulary(userId, structuredResponse.vocabulary);
+            } else {
+                console.log('Vocabulary tracking conditions not met:', {
+                    userId: !!userId,
+                    track_vocabulary: this.currentSettings?.track_vocabulary,
+                    hasVocabulary: !!structuredResponse.vocabulary,
+                    vocabulary: structuredResponse.vocabulary
+                });
             }
 
             // Track usage if user is authenticated
@@ -160,7 +167,7 @@ IMPORTANT: You must respond in valid JSON format with the following structure:`;
 
         if (this.currentSettings?.track_vocabulary) {
             jsonStructure += `,
-  "vocabulary": [{"word": "target_language_word", "translation": "English translation", "part_of_speech": "noun/verb/etc", "example_sentence": "example usage"}]`;
+  "vocabulary": [{"word": "target_language_word", "translation": "English translation", "part_of_speech": "noun/verb/etc"}]`;
         }
 
         if (this.currentSettings?.suggest_natural_alternatives) {
@@ -256,14 +263,20 @@ Remember: Your response must be valid JSON!`;
 
     private async trackVocabulary(userId: string, vocabulary: any[]): Promise<void> {
         try {
+            console.log('Tracking vocabulary for user:', userId, 'words:', vocabulary);
             for (const vocab of vocabulary) {
-                await settingsService.addVocabularyWord(
+                console.log('Adding vocabulary word:', vocab);
+                const result = await settingsService.addVocabularyWord(
                     userId,
                     vocab.word,
                     vocab.translation,
                     vocab.part_of_speech,
-                    vocab.example_sentence
                 );
+                if (result.error) {
+                    console.error('Error adding vocabulary word:', result.error);
+                } else {
+                    console.log('Successfully added vocabulary word:', vocab.word);
+                }
             }
         } catch (error) {
             console.error('Error tracking vocabulary:', error);
