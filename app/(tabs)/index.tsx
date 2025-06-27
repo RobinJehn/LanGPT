@@ -4,7 +4,7 @@ import { languageLearningService, StructuredResponse } from '@/services/openai';
 import { AVAILABLE_LANGUAGES, settingsService, UserSettings } from '@/services/settings';
 import { UserProfile } from '@/services/supabase';
 import { usageService } from '@/services/usage';
-import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -306,7 +306,8 @@ export default function HomeScreen() {
           <View key={index} style={styles.correctionItem}>
             <View style={styles.correctionTextRow}>
               <Text style={styles.originalText}>{correction.original || ''}</Text>
-              <Feather name="arrow-right" size={16} color="#856404" style={{ marginHorizontal: 8 }} />
+            </View>
+            <View style={styles.correctionTextRow}>
               <Text style={styles.correctedText}>{correction.corrected || ''}</Text>
             </View>
             <Text style={styles.correctionExplanation}>{correction.explanation || ''}</Text>
@@ -911,7 +912,12 @@ const styles = StyleSheet.create({
   correctionsContainer: {
     backgroundColor: '#fffbe6',
     borderLeftWidth: 5,
-    borderLeftColor: '#ffc107',
+    borderLeftColor: '#bfa800',
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    width: '100%',
+    overflow: 'hidden',
   },
   correctionsTitle: {
     fontSize: 16,
@@ -924,19 +930,25 @@ const styles = StyleSheet.create({
   correctionTextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    width: '100%',
   },
   originalText: {
     fontSize: 15,
     color: '#dc3545',
     textDecorationLine: 'line-through',
-    marginRight: 4,
+    flex: 1,
+    flexWrap: 'wrap',
+    minWidth: 0,
   },
   correctedText: {
     fontSize: 15,
-    color: '#28a745',
+    color: '#388e3c',
     fontWeight: 'bold',
-    marginLeft: 4,
+    flex: 1,
+    flexWrap: 'wrap',
+    minWidth: 0,
   },
   correctionExplanation: {
     fontSize: 13,
