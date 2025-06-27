@@ -19,6 +19,7 @@ export interface StructuredResponse {
         original: string;
         corrected: string;
         explanation: string;
+        has_issue: boolean;
     }[];
     vocabulary?: {
         word: string;
@@ -29,18 +30,20 @@ export interface StructuredResponse {
         original: string;
         alternatives: string[];
         explanation: string;
+        has_issue: boolean;
     }[];
     verb_conjugations?: {
         verb: string;
         tense: string;
-        conjugations: string[];
+        conjugations: { pronoun: string; form: string }[];
         explanation: string;
     }[];
     tense_explanation?: {
-        incorrect_usage: string;
+        original_tense: string;
         correct_tense: string;
         explanation: string;
         examples: string[];
+        has_issue: boolean;
     }[];
 }
 
@@ -74,6 +77,7 @@ export class LanguageLearningService {
 
             // Generate system prompt based on user settings
             const systemPrompt = this.generateStructuredSystemPrompt();
+            console.log('System prompt:', systemPrompt);
 
             // Initialize or update conversation history with system prompt
             if (this.conversationHistory.length === 0) {
@@ -100,6 +104,9 @@ export class LanguageLearningService {
 
             const assistantResponseText = completion.choices[0]?.message?.content || '{"response": "Sorry, I couldn\'t generate a response."}';
 
+            // Always log the raw GPT response
+            console.log('[GPT RAW RESPONSE]', assistantResponseText);
+
             // Parse the JSON response
             let structuredResponse: StructuredResponse;
             try {
@@ -111,6 +118,9 @@ export class LanguageLearningService {
                     response: assistantResponseText,
                 };
             }
+
+            // Always log the parsed structured response
+            console.log('[GPT PARSED RESPONSE]', structuredResponse);
 
             // Add assistant response to conversation history (only the main response text)
             this.conversationHistory.push({
@@ -158,79 +168,85 @@ IMPORTANT: You must respond in valid JSON format with the following structure:`;
 
         // Build JSON structure based on enabled settings
         let jsonStructure = `{
-  "response": "Your main response to the user in natural, conversational language"`;
+  "response": "Your main response to the user in natural, conversational language. ONLY reply to the user's prompt, do NOT comment on the user's language, mistakes, or correctness in this field—just reply as if you were having a conversation."`;
+
+        let rules = [];
 
         if (this.currentSettings?.always_correct_sentences) {
             jsonStructure += `,
-  "corrections": [{"original": "incorrect text", "corrected": "correct text", "explanation": "why it's wrong"}]`;
+  "corrections": [{"original": "incorrect text", "corrected": "correct text", "explanation": "why it's wrong", "has_issue": true}]`;
+            let rule = "Only include the 'corrections' field if the user made a mistake. For corrections, always include a boolean field (has_issue) indicating whether there was a problem with the user's usage.";
+
+            if (this.currentSettings?.correct_accents) {
+                rule += " Don't correct missing accents (e.g. 'como' instead of 'cómo').";
+            } else {
+                rule += " Correct missing accents (e.g. 'como' instead of 'cómo').";
+            }
+
+            if (this.currentSettings?.correct_punctuation) {
+                rule += " Don't correct missing punctuation (e.g. 'Hola' instead of '¡Hola!').";
+            } else {
+                rule += " Correct missing punctuation (e.g. 'Hola' instead of '¡Hola!').";
+            }
+
+            if (this.currentSettings?.correct_capitalization) {
+                rule += " Don't correct missing capitalization (e.g. 'hola' instead of 'Hola').";
+            } else {
+                rule += " Correct missing capitalization (e.g. 'hola' instead of 'Hola').";
+            }
+
+            rules.push(rule);
         }
 
         if (this.currentSettings?.track_vocabulary) {
             jsonStructure += `,
   "vocabulary": [{"word": "target_language_word", "translation": "English translation", "part_of_speech": "noun/verb/etc"}]`;
+            rules.push("For verbs, always provide the base form (infinitive) in the vocabulary section, not conjugated forms. For example: - If user says 'estás', track 'estar' - If user says 'hablo', track 'hablar' - If user says 'comí', track 'comer'");
         }
 
         if (this.currentSettings?.suggest_natural_alternatives) {
             jsonStructure += `,
-  "natural_alternatives": [{"original": "user's phrase", "alternatives": ["better phrase 1", "better phrase 2"], "explanation": "why these are better"}]`;
+  "natural_alternatives": [{"original": "user's phrase", "alternatives": ["better phrase 1", "better phrase 2"], "explanation": "why these are better", "has_issue": true}]`;
+            rules.push("Only include the 'natural_alternatives' field if the user's original phrase was unnatural or awkward. Do NOT include natural_alternatives just for spelling, punctuation, or grammar mistakes if the original was otherwise natural. Do not include any alternatives that are already shown in the corrections section.");
         }
 
         if (this.currentSettings?.show_verb_conjugations) {
             jsonStructure += `,
-  "verb_conjugations": [{"verb": "base_verb", "tense": "present/past/future", "conjugations": ["yo form", "tú form", "él/ella form"], "explanation": "when to use this tense"}]`;
+  "verb_conjugations": [{
+    "verb": "base_verb",
+    "tense": "present/past/future/imperativo/etc",
+    "conjugations": [{ "pronoun": "yo", "form": "estoy" }, { "pronoun": "tú", "form": "estás" }, ...],
+    "explanation": "when to use this tense"
+  }]`;
+            rules.push(
+                "Always include the 'verb_conjugations' field, regardless of whether a mistake was made. " +
+                "For each verb, provide an array of objects for conjugations, each with a 'pronoun' and 'form'. " +
+                "If multiple verbs share the same tense, group them together in a single table (for UI rendering). " +
+                "If a verb is in the 'imperativo' tense, put it in its own table, as the pronouns differ (no 'yo', special forms for 'usted', etc.). " +
+                "Example: {\"pronoun\": \"yo\", \"form\": \"estoy\"}. " +
+                "For imperativo, only include the appropriate pronouns (tú, usted, vosotros, ustedes). " +
+                "If multiple verbs are relevant, include all of them in the array."
+            );
         }
 
         if (this.currentSettings?.explain_tense_usage) {
             jsonStructure += `,
-  "tense_explanation": [{"incorrect_usage": "what user said", "correct_tense": "what they should use", "explanation": "why", "examples": ["example 1", "example 2"]}]`;
+  "tense_explanation": [{"original_tense": "presente/preterito/futuro/etc", "correct_tense": "presente/preterito/futuro/etc", "explanation": "why", "examples": ["example 1", "example 2"], "has_issue": true}]`;
+            rules.push("For tense_explanation, only include it and set has_issue to true if the user used the wrong tense (e.g., present instead of past, future instead of present). Do NOT set has_issue to true for other errors like using the wrong verb, spelling mistakes, or punctuation errors.");
         }
 
-        jsonStructure += `
-}`;
+        jsonStructure += `\n}`;
 
         prompt += `\n${jsonStructure}
 
-Only include the fields that are enabled in the settings above. If a feature is disabled, do not include that field in your response.
-
-Your teaching approach:`;
-
-        // Add specific instructions based on user preferences
-        if (this.currentSettings?.always_correct_sentences) {
-            prompt += '\n- Always identify and correct grammatical errors in the user\'s text';
+IMPORTANT RULES:`;
+        if (rules.length > 0) {
+            rules.forEach((rule, idx) => {
+                prompt += `\n${idx + 1}. ${rule}`;
+            });
         }
 
-        if (this.currentSettings?.suggest_natural_alternatives) {
-            prompt += '\n- Suggest more natural or colloquial ways to express the same idea';
-        }
-
-        if (this.currentSettings?.show_verb_conjugations) {
-            prompt += '\n- If the user makes a verb conjugation error, provide all conjugations for that verb in the relevant tense';
-        }
-
-        if (this.currentSettings?.explain_tense_usage) {
-            prompt += '\n- When the user uses the wrong tense, explain which tense should be used and why';
-        }
-
-        // Add custom instructions if provided
-        if (this.currentSettings?.custom_instructions) {
-            prompt += `\n- Additional instructions: ${this.currentSettings.custom_instructions}`;
-        }
-
-        // Only include vocabulary instructions if tracking is enabled
-        if (this.currentSettings?.track_vocabulary) {
-            prompt += `\n\nFor vocabulary tracking, identify words in ${languageName} that the user used or that are relevant to the conversation. 
-
-IMPORTANT: For verbs, always provide the base form (infinitive) in the vocabulary section, not conjugated forms. For example:
-- If user says "estás", track "estar" 
-- If user says "hablo", track "hablar"
-- If user says "comí", track "comer"
-
-Include translations and parts of speech when helpful.`;
-        }
-
-        prompt += `\n\nAlways be encouraging and patient. Adapt to the user's skill level and provide clear explanations.
-
-Remember: Your response must be valid JSON!`;
+        prompt += `\n\nAlways be encouraging and patient. Adapt to the user's skill level and provide clear explanations.`;
 
         return prompt;
     }
