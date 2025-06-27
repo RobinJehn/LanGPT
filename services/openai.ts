@@ -47,6 +47,10 @@ export interface StructuredResponse {
     }[];
 }
 
+function isStructuredResponse(obj: any): obj is StructuredResponse {
+    return obj && typeof obj.response === 'string';
+}
+
 export class LanguageLearningService {
     private conversationHistory: ChatMessage[] = [];
     private currentSettings: UserSettings | null = null;
@@ -108,15 +112,44 @@ export class LanguageLearningService {
             console.log('[GPT RAW RESPONSE]', assistantResponseText);
 
             // Parse the JSON response
-            let structuredResponse: StructuredResponse;
+            let structuredResponse: StructuredResponse | undefined;
+            let parsed: any = null;
             try {
-                structuredResponse = JSON.parse(assistantResponseText);
+                parsed = JSON.parse(assistantResponseText);
             } catch (error) {
                 console.error('Failed to parse JSON response:', error);
-                // Fallback to plain text response
-                structuredResponse = {
-                    response: assistantResponseText,
-                };
+            }
+
+            if (isStructuredResponse(parsed)) {
+                structuredResponse = parsed;
+            } else {
+                // Try a second time by asking GPT again
+                console.warn('GPT response is not valid StructuredResponse, retrying once...');
+                const retryCompletion = await openai.chat.completions.create({
+                    model: model,
+                    messages: [
+                        ...this.conversationHistory,
+                        { role: 'system', content: 'Your last response was not valid JSON. Please reply ONLY with a valid JSON object matching the required format.' }
+                    ],
+                    max_tokens: 1000,
+                    temperature: 0.7,
+                    response_format: { type: "json_object" },
+                });
+                const retryText = retryCompletion.choices[0]?.message?.content || '{"response": "Sorry, I couldn\'t generate a response."}';
+                console.log('[GPT RETRY RAW RESPONSE]', retryText);
+                try {
+                    parsed = JSON.parse(retryText);
+                } catch (error) {
+                    console.error('Failed to parse retry JSON response:', error);
+                }
+                if (isStructuredResponse(parsed)) {
+                    structuredResponse = parsed;
+                } else {
+                    // Give up and return a user-friendly error
+                    return {
+                        response: "Sorry, I couldn't understand the AI's response. Please try asking your question again.",
+                    };
+                }
             }
 
             // Always log the parsed structured response
