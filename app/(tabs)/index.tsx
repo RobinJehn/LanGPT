@@ -358,76 +358,32 @@ export default function HomeScreen() {
     </View>
   );
 
-  const renderVerbConjugations = (conjugations: any[]) => {
-    if (!conjugations || conjugations.length === 0) return null;
-
-    // Group by tense
-    const tenseGroups: { [tense: string]: any[] } = {};
-    conjugations.forEach(conj => {
-      if (!tenseGroups[conj.tense]) tenseGroups[conj.tense] = [];
-      tenseGroups[conj.tense].push(conj);
-    });
-
-    return (
-      <View style={[styles.card, styles.conjugationsContainer]}>
-        <View style={styles.cardHeaderRow}>
-          <FontAwesome5 name="book-open" size={18} color="#dc3545" style={{ marginRight: 8 }} />
-          <Text style={styles.conjugationsTitle}>Verb Conjugations</Text>
-        </View>
-        {Object.entries(tenseGroups).map(([tense, verbs], groupIdx) => {
-          // For imperativo, use only the appropriate pronouns
-          let allPronouns: string[] = [];
-          if (tense.toLowerCase().includes('imperativo')) {
-            allPronouns = ['tú', 'usted', 'vosotros', 'ustedes'];
-          } else {
-            // Collect all unique pronouns from all verbs in this tense
-            allPronouns = Array.from(new Set(
-              verbs.flatMap((v: any) => v.conjugations.map((c: any) => c.pronoun))
-            ));
-          }
-          // Remove empty pronouns (for infinitive)
-          allPronouns = allPronouns.filter(Boolean);
-          return (
-            <View key={groupIdx} style={styles.conjugationItem}>
-              <View style={styles.conjugationHeaderRow}>
-                {verbs.map((v: any, i: number) => (
-                  <React.Fragment key={i}>
-                    <Text style={styles.verbText}>{v.verb}</Text>
-                    <View style={styles.tenseBadge}><Text style={styles.tenseBadgeText}>{v.tense}</Text></View>
-                    {i < verbs.length - 1 && <Text style={{ marginHorizontal: 4 }}>|</Text>}
-                  </React.Fragment>
-                ))}
-              </View>
-              <View style={{ /* overflow: 'auto' */ }}>
-                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                  <View style={{ width: 90 }} />
-                  {verbs.map((v: any, i: number) => (
-                    <Text key={i} style={[styles.verbText, { minWidth: 80, textAlign: 'center' }]}>{v.verb}</Text>
-                  ))}
+  const renderVerbConjugations = (conjugations: any[]) => (
+    <View style={[styles.card, styles.conjugationsContainer]}>
+      <View style={styles.cardHeaderRow}>
+        <FontAwesome5 name="book-open" size={18} color="#dc3545" style={{ marginRight: 8 }} />
+        <Text style={styles.conjugationsTitle}>Verb Conjugations</Text>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%' }}>
+        {conjugations.map((conj, index) => (
+          <View key={index} style={[styles.conjugationItem, { flex: 1, minWidth: 220, maxWidth: 350, margin: 4 }]}> 
+            <View style={styles.conjugationHeaderRow}>
+              <Text style={styles.verbText}>{conj.verb || ''}</Text>
+              <View style={styles.tenseBadge}><Text style={styles.tenseBadgeText}>{conj.tense || ''}</Text></View>
+            </View>
+            <View style={styles.conjugationTable}>
+              {Array.isArray(conj.conjugations) && conj.conjugations.map((c: any, i: number) => (
+                <View key={i} style={styles.conjugationRow}>
+                  <Text style={styles.conjugationForm}>{c.pronoun} {c.form}</Text>
                 </View>
-                {allPronouns.map((pronoun, rowIdx) => (
-                  <View key={rowIdx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                    <Text style={[styles.conjugationForm, { width: 90 }]}>{pronoun}</Text>
-                    {verbs.map((v: any, colIdx: number) => {
-                      const found = v.conjugations.find((c: any) => c.pronoun === pronoun);
-                      return (
-                        <Text key={colIdx} style={[styles.conjugationForm, { minWidth: 80, textAlign: 'center' }]}>
-                          {found ? found.form : ''}
-                        </Text>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-              {verbs.map((v: any, i: number) => (
-                <Text key={i} style={styles.conjugationExplanation}>{v.explanation || ''}</Text>
               ))}
             </View>
-          );
-        })}
+            <Text style={styles.conjugationExplanation}>{conj.explanation || ''}</Text>
+          </View>
+        ))}
       </View>
-    );
-  };
+    </View>
+  );
 
   const renderTenseExplanation = (explanations: any[]) => (
     <View style={[styles.card, styles.tenseContainer]}>
