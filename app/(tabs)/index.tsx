@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -29,6 +30,308 @@ interface Message {
   isUser: boolean;
   timestamp: Date;
   structuredResponse?: StructuredResponse;
+  pending?: boolean;
+  animateIn?: boolean;
+}
+
+const hasIssues = (data: any[]): boolean => {
+  return data.some(item => item.has_issue === true);
+};
+
+const renderCorrections = (corrections: any[], messageId: string, collapsedSections: {[key: string]: boolean}, toggleSection: (id: string) => void) => {
+  if (!hasIssues(corrections)) return null;
+  
+  const sectionId = `corrections-${messageId}`;
+  const isCollapsed = collapsedSections[sectionId];
+  
+  return (
+    <View style={[styles.card, styles.correctionsContainer, styles.learningFeatureCard]}>
+      <TouchableOpacity 
+        style={styles.cardHeaderRow} 
+        onPress={() => toggleSection(sectionId)}
+        activeOpacity={0.7}
+      >
+        <MaterialCommunityIcons name="pencil" size={20} color="#ffc107" style={{ marginRight: 8 }} />
+        <Text style={styles.correctionsTitle}>Corrections</Text>
+        <MaterialCommunityIcons 
+          name={isCollapsed ? "chevron-down" : "chevron-up"} 
+          size={20} 
+          color="#666" 
+          style={{ marginLeft: 'auto' }} 
+        />
+      </TouchableOpacity>
+      {!isCollapsed && (
+        <>
+          {corrections.map((correction, index) => (
+            correction.has_issue && (
+              <View key={index} style={styles.correctionItem}>
+                <View style={styles.correctionTextRow}>
+                  <Text style={styles.originalText}>{correction.original || ''}</Text>
+                </View>
+                <View style={styles.correctionTextRow}>
+                  <Text style={styles.correctedText}>{correction.corrected || ''}</Text>
+                </View>
+                <Text style={styles.correctionExplanation}>{correction.explanation || ''}</Text>
+              </View>
+            )
+          ))}
+        </>
+      )}
+    </View>
+  );
+};
+
+const renderNaturalAlternatives = (alternatives: any[], messageId: string, collapsedSections: {[key: string]: boolean}, toggleSection: (id: string) => void) => {
+  if (!hasIssues(alternatives)) return null;
+  
+  const sectionId = `alternatives-${messageId}`;
+  const isCollapsed = collapsedSections[sectionId];
+  
+  return (
+    <View style={[styles.card, styles.alternativesContainer, styles.learningFeatureCard]}>
+      <TouchableOpacity 
+        style={styles.cardHeaderRow} 
+        onPress={() => toggleSection(sectionId)}
+        activeOpacity={0.7}
+      >
+        <MaterialCommunityIcons name="lightbulb-on-outline" size={20} color="#17a2b8" style={{ marginRight: 8 }} />
+        <Text style={styles.alternativesTitle}>Natural Alternatives</Text>
+        <MaterialCommunityIcons 
+          name={isCollapsed ? "chevron-down" : "chevron-up"} 
+          size={20} 
+          color="#666" 
+          style={{ marginLeft: 'auto' }} 
+        />
+      </TouchableOpacity>
+      {!isCollapsed && (
+        <>
+          {alternatives.map((alt, index) => (
+            alt.has_issue && (
+              <View key={index} style={styles.alternativeItem}>
+                <View style={styles.alternativesList}>
+                  {Array.isArray(alt.alternatives) && alt.alternatives.map((altText: string, i: number) => (
+                    <View key={i} style={styles.bulletRow}>
+                      <Text style={styles.bulletPoint}>{'\u2022'}</Text>
+                      <Text style={styles.alternativesText}>{altText}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.alternativesExplanation}>{alt.explanation || ''}</Text>
+              </View>
+            )
+          ))}
+        </>
+      )}
+    </View>
+  );
+};
+
+const renderVerbConjugations = (conjugations: any[], messageId: string, collapsedSections: {[key: string]: boolean}, toggleSection: (id: string) => void) => {
+  const sectionId = `conjugations-${messageId}`;
+  const isCollapsed = collapsedSections[sectionId];
+  
+  return (
+    <View style={[styles.card, styles.conjugationsContainer, styles.learningFeatureCard]}>
+      <TouchableOpacity 
+        style={styles.cardHeaderRow} 
+        onPress={() => toggleSection(sectionId)}
+        activeOpacity={0.7}
+      >
+        <FontAwesome5 name="book-open" size={18} color="#dc3545" style={{ marginRight: 8 }} />
+        <Text style={styles.conjugationsTitle}>Verb Conjugations</Text>
+        <MaterialCommunityIcons 
+          name={isCollapsed ? "chevron-down" : "chevron-up"} 
+          size={20} 
+          color="#666" 
+          style={{ marginLeft: 'auto' }} 
+        />
+      </TouchableOpacity>
+      {!isCollapsed && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%' }}>
+          {conjugations.map((conj, index) => (
+            <View key={index} style={[styles.conjugationItem, { flex: 1, minWidth: 220, maxWidth: 350, margin: 4 }]}> 
+              <View style={styles.conjugationHeaderRow}>
+                <Text style={styles.verbText}>{conj.verb || ''}</Text>
+                <View style={styles.tenseBadge}><Text style={styles.tenseBadgeText}>{conj.tense || ''}</Text></View>
+              </View>
+              <View style={styles.conjugationTable}>
+                {Array.isArray(conj.conjugations) && conj.conjugations.map((c: any, i: number) => (
+                  <View key={i} style={styles.conjugationRow}>
+                    <Text style={styles.conjugationForm}>{c.pronoun} {c.form}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.conjugationExplanation}>{conj.explanation || ''}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const renderTenseExplanation = (explanations: any[], messageId: string, collapsedSections: {[key: string]: boolean}, toggleSection: (id: string) => void) => {
+  const filteredExplanations = explanations.filter(
+    (exp: any) => exp.original_tense && exp.correct_tense && exp.original_tense !== exp.correct_tense
+  );
+  
+  if (!hasIssues(filteredExplanations)) return null;
+  
+  const sectionId = `tense-${messageId}`;
+  const isCollapsed = collapsedSections[sectionId];
+  
+  return (
+    <View style={[styles.card, styles.tenseContainer, styles.learningFeatureCard]}>
+      <TouchableOpacity 
+        style={styles.cardHeaderRow} 
+        onPress={() => toggleSection(sectionId)}
+        activeOpacity={0.7}
+      >
+        <MaterialCommunityIcons name="clock-outline" size={20} color="#6c757d" style={{ marginRight: 8 }} />
+        <Text style={styles.tenseTitle}>Tense Usage</Text>
+        <MaterialCommunityIcons 
+          name={isCollapsed ? "chevron-down" : "chevron-up"} 
+          size={20} 
+          color="#666" 
+          style={{ marginLeft: 'auto' }} 
+        />
+      </TouchableOpacity>
+      {!isCollapsed && (
+        <>
+          {filteredExplanations.map((exp, index) => (
+            exp.has_issue && (
+              <View key={index} style={styles.tenseItem}>
+                <Text style={styles.incorrectText}>{exp.original_tense || ''}</Text>
+                <Text style={styles.correctTenseText}>Use: {exp.correct_tense || ''}</Text>
+                <Text style={styles.tenseExplanation}>{exp.explanation || ''}</Text>
+                {exp.examples && Array.isArray(exp.examples) && exp.examples.length > 0 && (
+                  <Text style={styles.examplesText}>Examples: {exp.examples.join(', ')}</Text>
+                )}
+              </View>
+            )
+          ))}
+        </>
+      )}
+    </View>
+  );
+};
+
+function AnimatedBotMessage({ item, userSettings, messageFoldStates, collapsedSections, toggleMessageFold, toggleSection }: { 
+  item: Message, 
+  userSettings: UserSettings | null,
+  messageFoldStates: {[messageId: string]: boolean},
+  collapsedSections: {[key: string]: boolean},
+  toggleMessageFold: (messageId: string, hasCorrections: boolean) => void,
+  toggleSection: (id: string) => void
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const foldAnim = useRef(new Animated.Value(0)).current; // Start at 0 (folded)
+  
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Check if any learning features are present
+  const hasLearningFeatures = (
+    (userSettings?.always_correct_sentences && item.structuredResponse?.corrections && item.structuredResponse.corrections.length > 0) ||
+    (userSettings?.suggest_natural_alternatives && item.structuredResponse?.natural_alternatives && item.structuredResponse.natural_alternatives.length > 0) ||
+    (userSettings?.show_verb_conjugations && item.structuredResponse?.verb_conjugations && item.structuredResponse.verb_conjugations.length > 0) ||
+    (userSettings?.explain_tense_usage && item.structuredResponse?.tense_explanation && item.structuredResponse.tense_explanation.length > 0)
+  );
+
+  const hasCorrectionsPart = !!(item.structuredResponse?.corrections && item.structuredResponse.corrections.length > 0);
+  const isFolded = messageFoldStates[item.id] !== true; // Default to false (folded)
+
+  // Initialize animation state based on current fold state
+  useEffect(() => {
+    foldAnim.setValue(isFolded ? 0 : 1);
+  }, [isFolded, foldAnim]);
+
+  const handleFoldToggle = () => {
+    toggleMessageFold(item.id, hasCorrectionsPart);
+    Animated.timing(foldAnim, {
+      toValue: isFolded ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [
+          { scaleY: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
+          { scaleX: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
+        ],
+      }}
+    >
+      <View style={[styles.messageContainer, styles.botMessage]}>
+        <View style={styles.botMessageHeader}>
+          <Text style={[styles.messageText, styles.botMessageText]}>
+            {item.text}
+          </Text>
+          {hasLearningFeatures && (
+            <TouchableOpacity 
+              style={styles.foldIconButton}
+              onPress={handleFoldToggle}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons 
+                name={isFolded ? "chevron-down" : "chevron-up"} 
+                size={16} 
+                color="#007AFF" 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        {/* Learning features section with animation */}
+        {hasLearningFeatures && (
+          <Animated.View 
+            style={[
+              styles.learningFeaturesContainer,
+              isFolded && {
+                maxHeight: 0,
+                opacity: 0,
+                paddingTop: 0,
+                marginTop: 0,
+              },
+              !isFolded && {
+                maxHeight: foldAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 1000],
+                }),
+                opacity: foldAnim,
+                overflow: 'hidden',
+              }
+            ]}
+          >
+            {userSettings?.always_correct_sentences &&
+              item.structuredResponse?.corrections &&
+              item.structuredResponse.corrections.length > 0 &&
+              renderCorrections(item.structuredResponse.corrections, item.id, collapsedSections, toggleSection)}
+            {userSettings?.suggest_natural_alternatives &&
+              item.structuredResponse?.natural_alternatives &&
+              item.structuredResponse.natural_alternatives.length > 0 &&
+              renderNaturalAlternatives(item.structuredResponse.natural_alternatives, item.id, collapsedSections, toggleSection)}
+            {userSettings?.show_verb_conjugations &&
+              item.structuredResponse?.verb_conjugations &&
+              item.structuredResponse.verb_conjugations.length > 0 &&
+              renderVerbConjugations(item.structuredResponse.verb_conjugations, item.id, collapsedSections, toggleSection)}
+            {userSettings?.explain_tense_usage &&
+              item.structuredResponse?.tense_explanation &&
+              item.structuredResponse.tense_explanation.length > 0 &&
+              renderTenseExplanation(item.structuredResponse.tense_explanation, item.id, collapsedSections, toggleSection)}
+          </Animated.View>
+        )}
+      </View>
+    </Animated.View>
+  );
 }
 
 export default function HomeScreen() {
@@ -41,6 +344,17 @@ export default function HomeScreen() {
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isMockMode, setIsMockMode] = useState(false);
   const settingsLoadedRef = useRef(false);
+  const [ellipsis, setEllipsis] = useState('.');
+  const typingDotAnims = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  const [pendingToRealAnim, setPendingToRealAnim] = useState<{ [id: string]: Animated.Value }>({});
+  const [showAllFeatures, setShowAllFeatures] = useState(true);
+  const [collapsedSections, setCollapsedSections] = useState<{[key: string]: boolean}>({});
+  const flatListRef = useRef<FlatList>(null);
+  const [messageFoldStates, setMessageFoldStates] = useState<{[messageId: string]: boolean}>({});
 
   const loadUserSettings = useCallback(async () => {
     if (!user || settingsLoadedRef.current) return;
@@ -86,6 +400,31 @@ export default function HomeScreen() {
     }, [user, loadUserSettings])
   );
 
+  useEffect(() => {
+    let interval: any;
+    if (isLoading) {
+      // WhatsApp-style bouncing dots
+      const createBounce = (anim: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: -6, duration: 200, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }),
+            Animated.delay(200 * (2 - delay / 200)),
+          ])
+        );
+      createBounce(typingDotAnims[0], 0).start();
+      createBounce(typingDotAnims[1], 200).start();
+      createBounce(typingDotAnims[2], 400).start();
+    } else {
+      typingDotAnims.forEach(anim => anim.setValue(0));
+    }
+    return () => {
+      typingDotAnims.forEach(anim => anim.stopAnimation());
+      typingDotAnims.forEach(anim => anim.setValue(0));
+    };
+  }, [isLoading]);
+
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -96,7 +435,18 @@ export default function HomeScreen() {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const pendingId = 'pending-bot';
+    setMessages(prev => [
+      ...prev,
+      userMessage,
+      {
+        id: pendingId,
+        text: '',
+        isUser: false,
+        timestamp: new Date(),
+        pending: true
+      }
+    ]);
     setInputText('');
     setIsLoading(true);
 
@@ -124,7 +474,12 @@ export default function HomeScreen() {
         structuredResponse: structuredResponse,
       };
       
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev => prev.map(m =>
+        m.id === pendingId
+          ? { ...botMessage, id: Date.now().toString(), animateIn: true }
+          : m
+      ));
+      setPendingToRealAnim(anim => ({ ...anim, [botMessage.id]: new Animated.Value(0) }));
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert(
@@ -132,6 +487,7 @@ export default function HomeScreen() {
         'Failed to get response from AI assistant. Please check your API key and try again.',
         [{ text: 'OK' }]
       );
+      setMessages(prev => prev.filter(m => m.id !== pendingId));
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +496,6 @@ export default function HomeScreen() {
   // Generate mock response for testing
   const generateMockResponse = (userInput: string, settings?: UserSettings): StructuredResponse => {
     const lowerInput = userInput.toLowerCase();
-    const targetLanguage = settings?.target_language || 'spanish';
     
     // Base response
     let response = `¡Excelente pregunta! Te ayudo con eso.`;
@@ -218,7 +573,7 @@ export default function HomeScreen() {
     if (settings?.explain_tense_usage) {
       if (lowerInput.includes('ayer') && lowerInput.includes('voy')) {
         mockResponse.tense_explanation = [{
-          original: 'presente',
+          original_tense: 'presente',
           correct_tense: 'pretérito',
           explanation: 'Use the preterite tense for completed actions in the past.',
           examples: ['Ayer fui al parque.', 'La semana pasada visité a mi familia.'],
@@ -295,170 +650,151 @@ export default function HomeScreen() {
     return language ? language.name : code;
   };
 
-  const renderCorrections = (corrections: any[]) => (
-    <View style={[styles.card, styles.correctionsContainer]}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialCommunityIcons name="pencil" size={20} color="#ffc107" style={{ marginRight: 8 }} />
-        <Text style={styles.correctionsTitle}>Corrections</Text>
-      </View>
-      {corrections.map((correction, index) => (
-        correction.has_issue && (
-          <View key={index} style={styles.correctionItem}>
-            <View style={styles.correctionTextRow}>
-              <Text style={styles.originalText}>{correction.original || ''}</Text>
-            </View>
-            <View style={styles.correctionTextRow}>
-              <Text style={styles.correctedText}>{correction.corrected || ''}</Text>
-            </View>
-            <Text style={styles.correctionExplanation}>{correction.explanation || ''}</Text>
-          </View>
-        )
-      ))}
-    </View>
-  );
+  const toggleAllFeatures = () => {
+    setShowAllFeatures(!showAllFeatures);
+  };
 
-  // const renderVocabulary = (vocabulary: any[]) => (
-  //   <View style={styles.vocabularyContainer}>
-  //     <Text style={styles.vocabularyTitle}>Vocabulary:</Text>
-  //     {vocabulary.map((vocab, index) => (
-  //       <View key={index} style={styles.vocabularyItem}>
-  //         <Text style={styles.vocabularyWord}>{vocab.word || ''}</Text>
-  //         {vocab.translation && (
-  //           <Text style={styles.vocabularyTranslation}> - {vocab.translation}</Text>
-  //         )}
-  //         {vocab.part_of_speech && (
-  //           <Text style={styles.vocabularyPartOfSpeech}> ({vocab.part_of_speech})</Text>
-  //         )}
-  //       </View>
-  //     ))}
-  //   </View>
-  // );
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
 
-  const renderNaturalAlternatives = (alternatives: any[]) => (
-    <View style={[styles.card, styles.alternativesContainer]}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialCommunityIcons name="lightbulb-on-outline" size={20} color="#17a2b8" style={{ marginRight: 8 }} />
-        <Text style={styles.alternativesTitle}>Natural Alternatives</Text>
-      </View>
-      {alternatives.map((alt, index) => (
-        alt.has_issue && (
-          <View key={index} style={styles.alternativeItem}>
-            <View style={styles.alternativesList}>
-              {Array.isArray(alt.alternatives) && alt.alternatives.map((altText: string, i: number) => (
-                <View key={i} style={styles.bulletRow}>
-                  <Text style={styles.bulletPoint}>{'\u2022'}</Text>
-                  <Text style={styles.alternativesText}>{altText}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.alternativesExplanation}>{alt.explanation || ''}</Text>
-          </View>
-        )
-      ))}
-    </View>
-  );
+  // Helper to determine if a message has corrections
+  const hasCorrections = (item: Message) =>
+    !!(item.structuredResponse?.corrections && item.structuredResponse.corrections.length > 0);
 
-  const renderVerbConjugations = (conjugations: any[]) => (
-    <View style={[styles.card, styles.conjugationsContainer]}>
-      <View style={styles.cardHeaderRow}>
-        <FontAwesome5 name="book-open" size={18} color="#dc3545" style={{ marginRight: 8 }} />
-        <Text style={styles.conjugationsTitle}>Verb Conjugations</Text>
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%' }}>
-        {conjugations.map((conj, index) => (
-          <View key={index} style={[styles.conjugationItem, { flex: 1, minWidth: 220, maxWidth: 350, margin: 4 }]}> 
-            <View style={styles.conjugationHeaderRow}>
-              <Text style={styles.verbText}>{conj.verb || ''}</Text>
-              <View style={styles.tenseBadge}><Text style={styles.tenseBadgeText}>{conj.tense || ''}</Text></View>
-            </View>
-            <View style={styles.conjugationTable}>
-              {Array.isArray(conj.conjugations) && conj.conjugations.map((c: any, i: number) => (
-                <View key={i} style={styles.conjugationRow}>
-                  <Text style={styles.conjugationForm}>{c.pronoun} {c.form}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.conjugationExplanation}>{conj.explanation || ''}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
+  // Set default fold state for each message on first render
+  useEffect(() => {
+    setMessageFoldStates(prev => {
+      const newStates = { ...prev };
+      messages.forEach(msg => {
+        if (newStates[msg.id] === undefined) {
+          newStates[msg.id] = hasCorrections(msg); // unfolded if corrections, else folded
+        }
+      });
+      return newStates;
+    });
+  }, [messages]);
 
-  const renderTenseExplanation = (explanations: any[]) => (
-    <View style={[styles.card, styles.tenseContainer]}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialCommunityIcons name="clock-outline" size={20} color="#6c757d" style={{ marginRight: 8 }} />
-        <Text style={styles.tenseTitle}>Tense Usage</Text>
-      </View>
-      {explanations.map((exp, index) => (
-        exp.has_issue && (
-          <View key={index} style={styles.tenseItem}>
-            <Text style={styles.incorrectText}>{exp.original_tense || ''}</Text>
-            <Text style={styles.correctTenseText}>Use: {exp.correct_tense || ''}</Text>
-            <Text style={styles.tenseExplanation}>{exp.explanation || ''}</Text>
-            {exp.examples && Array.isArray(exp.examples) && exp.examples.length > 0 && (
-              <Text style={styles.examplesText}>Examples: {exp.examples.join(', ')}</Text>
-            )}
-          </View>
-        )
-      ))}
-    </View>
-  );
+  const toggleMessageFold = (messageId: string, hasCorrections: boolean = false) => {
+    setMessageFoldStates(prev => {
+      const newState = !prev[messageId];
+      // When unfolding, set all sections except corrections to collapsed
+      if (newState) {
+        setCollapsedSections(prevSections => ({
+          ...prevSections,
+          [`alternatives-${messageId}`]: true,
+          [`conjugations-${messageId}`]: true,
+          [`tense-${messageId}`]: true,
+        }));
+      }
+      return {
+        ...prev,
+        [messageId]: newState
+      };
+    });
+  };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    // Filter out natural alternatives that are already shown in corrections
-    const filteredNaturalAlternatives = item.structuredResponse?.natural_alternatives?.filter(alt => {
-      if (!item.structuredResponse?.corrections) return true;
-      
-      // Check if any of the alternatives match any correction's corrected text
-      const correctedTexts = item.structuredResponse.corrections.map(correction => correction.corrected);
-      return !alt.alternatives?.some(alternative => 
-        correctedTexts.includes(alternative)
+    if (item.pending) {
+      return (
+        <View style={[styles.messageContainer, item.isUser ? styles.userMessage : styles.botMessage]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', height: 24 }}>
+            {[0, 1, 2].map(i => (
+              <Animated.Text
+                key={i}
+                style={{
+                  fontSize: 28,
+                  color: '#888',
+                  fontWeight: 'bold',
+                  marginHorizontal: 2,
+                  transform: [{ translateY: typingDotAnims[i] }],
+                }}
+              >
+                •
+              </Animated.Text>
+            ))}
+          </View>
+        </View>
       );
-    }) || [];
+    }
+
+    // Check if any learning features are present for non-animated messages
+    const hasLearningFeatures = !item.isUser && (
+      (userSettings?.always_correct_sentences && item.structuredResponse?.corrections && item.structuredResponse.corrections.length > 0) ||
+      (userSettings?.suggest_natural_alternatives && item.structuredResponse?.natural_alternatives && item.structuredResponse.natural_alternatives.length > 0) ||
+      (userSettings?.show_verb_conjugations && item.structuredResponse?.verb_conjugations && item.structuredResponse.verb_conjugations.length > 0) ||
+      (userSettings?.explain_tense_usage && item.structuredResponse?.tense_explanation && item.structuredResponse.tense_explanation.length > 0)
+    );
+
+    if (item.animateIn) {
+      return <AnimatedBotMessage 
+        item={item} 
+        userSettings={userSettings} 
+        messageFoldStates={messageFoldStates}
+        collapsedSections={collapsedSections}
+        toggleMessageFold={toggleMessageFold}
+        toggleSection={toggleSection}
+      />;
+    }
+
+    if (item.isUser) {
+      return (
+        <View style={[styles.messageContainer, styles.userMessage]}>
+          <Text style={[styles.messageText, styles.userMessageText]}>
+            {item.text}
+          </Text>
+          <Text style={styles.timestamp}>
+            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
+      );
+    }
+
+    const isFolded = messageFoldStates[item.id] !== true; // Default to false (folded)
 
     return (
-      <View style={[styles.messageContainer, item.isUser ? styles.userMessage : styles.botMessage]}>
-        <Text style={[styles.messageText, item.isUser ? styles.userMessageText : styles.botMessageText]}>
-          {item.text}
-        </Text>
+      <View style={[styles.messageContainer, styles.botMessage]}>
+        <View style={styles.botMessageHeader}>
+          <Text style={[styles.messageText, styles.botMessageText]}>
+            {item.text}
+          </Text>
+          {hasLearningFeatures && (
+            <TouchableOpacity 
+              style={styles.foldIconButton}
+              onPress={() => toggleMessageFold(item.id, hasCorrections(item))}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons 
+                name={isFolded ? "chevron-down" : "chevron-up"} 
+                size={16} 
+                color="#007AFF" 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
         
-        {/* Render structured learning features for bot messages */}
-        {!item.isUser && item.structuredResponse && (
-          <View style={styles.learningFeatures}>
-            {userSettings?.always_correct_sentences && 
-             item.structuredResponse.corrections && 
-             item.structuredResponse.corrections.length > 0 && 
-              renderCorrections(item.structuredResponse.corrections)}
-            
-            {/*
-            {userSettings?.track_vocabulary && 
-             item.structuredResponse.vocabulary && 
-             item.structuredResponse.vocabulary.length > 0 && 
-              renderVocabulary(item.structuredResponse.vocabulary)}
-            */}
-            
-            {userSettings?.suggest_natural_alternatives && 
-             filteredNaturalAlternatives.length > 0 && 
-              renderNaturalAlternatives(filteredNaturalAlternatives)}
-            
-            {userSettings?.show_verb_conjugations && 
-             item.structuredResponse.verb_conjugations && 
-             item.structuredResponse.verb_conjugations.length > 0 && 
-              renderVerbConjugations(item.structuredResponse.verb_conjugations)}
-            
-            {userSettings?.explain_tense_usage && 
-             item.structuredResponse.tense_explanation && 
-             item.structuredResponse.tense_explanation.length > 0 && 
-             item.structuredResponse.tense_explanation.some(
-               (exp: any) => exp.original_tense && exp.correct_tense && exp.original_tense !== exp.correct_tense
-             ) &&
-              renderTenseExplanation(
-                item.structuredResponse.tense_explanation.filter(
-                  (exp: any) => exp.original_tense && exp.correct_tense && exp.original_tense !== exp.correct_tense
-                )
-              )}
+        {/* Learning features section */}
+        {hasLearningFeatures && !isFolded && (
+          <View style={styles.learningFeaturesContainer}>
+            {userSettings?.always_correct_sentences &&
+              item.structuredResponse?.corrections &&
+              item.structuredResponse.corrections.length > 0 &&
+              renderCorrections(item.structuredResponse.corrections, item.id, collapsedSections, toggleSection)}
+            {userSettings?.suggest_natural_alternatives &&
+              item.structuredResponse?.natural_alternatives &&
+              item.structuredResponse.natural_alternatives.length > 0 &&
+              renderNaturalAlternatives(item.structuredResponse.natural_alternatives, item.id, collapsedSections, toggleSection)}
+            {userSettings?.show_verb_conjugations &&
+              item.structuredResponse?.verb_conjugations &&
+              item.structuredResponse.verb_conjugations.length > 0 &&
+              renderVerbConjugations(item.structuredResponse.verb_conjugations, item.id, collapsedSections, toggleSection)}
+            {userSettings?.explain_tense_usage &&
+              item.structuredResponse?.tense_explanation &&
+              item.structuredResponse.tense_explanation.length > 0 &&
+              renderTenseExplanation(item.structuredResponse.tense_explanation, item.id, collapsedSections, toggleSection)}
           </View>
         )}
         
@@ -535,14 +871,8 @@ export default function HomeScreen() {
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
           inverted={false}
+          ref={flatListRef}
         />
-
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.loadingText}>AI is thinking...</Text>
-          </View>
-        )}
 
         <View style={[styles.inputContainer]}>
           <View style={styles.inputWrapper}>
@@ -1074,5 +1404,33 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  foldIconButton: {
+    padding: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    marginLeft: 12,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    height: 22,
+    width: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  learningFeaturesContainer: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  botMessageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  learningFeatureCard: {
+    marginBottom: 12,
   },
 });
